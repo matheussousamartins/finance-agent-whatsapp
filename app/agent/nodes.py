@@ -10,7 +10,7 @@ from app.services.database import save_transaction, get_summary
 
 logger = logging.getLogger(__name__)
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
 
 # ─────────────────────────────────────────
@@ -18,7 +18,7 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 # Decide o que o usuário quer fazer
 # ─────────────────────────────────────────
 def classifier_node(state: AgentState) -> AgentState:
-    logger.info(f"Classificando mensagem: {state.message}")
+    logger.info(f"🔍 Classificando mensagem: {state.message}")
 
     prompt = CLASSIFIER_PROMPT.format(message=state.message)
     response = llm.invoke([HumanMessage(content=prompt)])
@@ -27,7 +27,7 @@ def classifier_node(state: AgentState) -> AgentState:
     if intent not in ["expense", "income", "query"]:
         intent = MessageIntent.UNKNOWN
 
-    logger.info(f"Intenção detectada: {intent}")
+    logger.info(f"✅ Intenção detectada: {intent}")
     return AgentState(**{**state.model_dump(), "intent": intent})
 
 
@@ -36,13 +36,23 @@ def classifier_node(state: AgentState) -> AgentState:
 # Extrai valor, categoria e descrição da mensagem
 # ─────────────────────────────────────────
 def extractor_node(state: AgentState) -> AgentState:
-    logger.info(f"Extraindo dados da mensagem: {state.message}")
+    logger.info(f"📦 Extraindo dados da mensagem: {state.message}")
 
-    prompt = EXTRACTOR_PROMPT.format(message=state.message)
+    prompt = EXTRACTOR_PROMPT.replace("{message}", state.message)
+    logger.info(f"📝 Prompt enviado: {prompt}") 
     response = llm.invoke([HumanMessage(content=prompt)])
 
     try:
-        data = json.loads(response.content.strip())
+        raw = response.content.strip()
+        logger.info(f"🔍 Resposta bruta do extrator: {raw}")
+
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        data = json.loads(raw)
         transaction_type = (
             TransactionType.INCOME if state.intent == "income" else TransactionType.EXPENSE
         )
@@ -54,7 +64,7 @@ def extractor_node(state: AgentState) -> AgentState:
             "transaction_type": transaction_type,
         })
     except json.JSONDecodeError:
-        logger.error(f"Erro ao parsear JSON do extrator: {response.content}")
+        logger.error(f"❌ Erro ao parsear JSON do extrator: {response.content}")
         return AgentState(**{**state.model_dump(), "amount": 0.0, "category": "Outros"})
 
 
@@ -63,7 +73,7 @@ def extractor_node(state: AgentState) -> AgentState:
 # Persiste no banco e gera resposta de confirmação
 # ─────────────────────────────────────────
 def saver_node(state: AgentState) -> AgentState:
-    logger.info(f"Salvando transação: {state.amount} - {state.category}")
+    logger.info(f"💾 Salvando transação: {state.amount} - {state.category}")
 
     save_transaction(
         phone=state.phone,

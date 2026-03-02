@@ -29,13 +29,13 @@ Regras:
 
 Exemplos:
 Mensagem: "gastei 45 no ifood"
-Resposta: {{"amount": 45.0, "category": "Alimentação", "description": "ifood"}}
+Resposta: {"amount": 45.0, "category": "Alimentação", "description": "ifood"}
 
 Mensagem: "paguei 1200 de aluguel"
-Resposta: {{"amount": 1200.0, "category": "Moradia", "description": "aluguel"}}
+Resposta: {"amount": 1200.0, "category": "Moradia", "description": "aluguel"}
 
 Mensagem: "recebi 3500 de salário"
-Resposta: {{"amount": 3500.0, "category": "Salário", "description": "salário"}}
+Resposta: {"amount": 3500.0, "category": "Salário", "description": "salário"}
 
 Mensagem: {message}
 Resposta:
