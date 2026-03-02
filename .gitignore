@@ -1,11 +1,31 @@
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
 
-# ENV
+# Ambiente virtual
+venv/
+.venv/
+
+# Variáveis de ambiente
 .env
 
-# VSCode
-.vscode/
+# Banco de dados
+*.db
+*.sqlite3
 
-venv
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pytest
+.pytest_cache/
+
+# Logs
+*.log
