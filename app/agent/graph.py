@@ -85,8 +85,11 @@ class FinanceAgent:
             phone=phone,
             message=caption or "comprovante",
             image_url=image_url,
-            intent="image",  # 👈 pula o classifier e vai direto pro image_extractor
+            intent="image",
         )
-        final_state = self.graph.invoke(initial_state, {"override_entry": "image_extractor"})
 
-        return final_state["response"]
+        # Invoca direto no image_extractor, pulando o classifier
+        state_after_extractor = image_extractor_node(initial_state)
+        state_after_saver = saver_node(state_after_extractor)
+
+        return state_after_saver.response
