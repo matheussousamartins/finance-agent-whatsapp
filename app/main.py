@@ -61,7 +61,7 @@ async def webhook(request: Request):
 
         if image_data:
             # Usuário mandou uma foto
-            image_url = image_data.get("url", "")
+            image_url = image_data.get("imageUrl", "") or image_data.get("url", "")
             caption = image_data.get("caption", "")
             logger.info(f"🖼️ Imagem recebida de {phone}: {image_url}")
 
