@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 
 from app.models.transaction import Base, Transaction, TransactionType
+from app.models.user import User, OnboardingStep
 
 load_dotenv()
 
@@ -27,6 +28,52 @@ def get_session() -> Session:
     """Retorna uma sessão do banco."""
     return SessionLocal()
 
+
+# ─────────────────────────────────────────
+# FUNÇÕES DE USUÁRIO
+# ─────────────────────────────────────────
+
+def get_user(phone: str) -> User | None:
+    """Busca um usuário pelo telefone."""
+    with get_session() as session:
+        return session.query(User).filter(User.phone == phone).first()
+
+
+def create_user(phone: str) -> User:
+    """Cria um novo usuário."""
+    with get_session() as session:
+        user = User(phone=phone, onboarding_step=OnboardingStep.WAITING_NAME)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
+
+
+def update_user_name(phone: str, name: str) -> User:
+    """Atualiza o nome do usuário e avança o onboarding."""
+    with get_session() as session:
+        user = session.query(User).filter(User.phone == phone).first()
+        user.name = name
+        user.onboarding_step = OnboardingStep.WAITING_BUDGET
+        session.commit()
+        session.refresh(user)
+        return user
+
+
+def update_user_budget(phone: str, budget: float) -> User:
+    """Atualiza o orçamento do usuário e finaliza o onboarding."""
+    with get_session() as session:
+        user = session.query(User).filter(User.phone == phone).first()
+        user.monthly_budget = budget
+        user.onboarding_step = OnboardingStep.DONE
+        session.commit()
+        session.refresh(user)
+        return user
+
+
+# ─────────────────────────────────────────
+# FUNÇÕES DE TRANSAÇÃO
+# ─────────────────────────────────────────
 
 def save_transaction(phone: str, type: TransactionType, amount: float, category: str, description: str = None) -> Transaction:
     """Salva uma transação no banco."""
@@ -60,7 +107,6 @@ def get_summary(phone: str, days: int = 30) -> dict:
         total_expense = sum(t.amount for t in transactions if t.type == TransactionType.EXPENSE)
         balance = total_income - total_expense
 
-        # Agrupa gastos por categoria
         expenses_by_category = {}
         for t in transactions:
             if t.type == TransactionType.EXPENSE:

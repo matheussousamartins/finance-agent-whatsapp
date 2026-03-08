@@ -73,3 +73,42 @@ Regras:
 Exemplo de resposta:
 {"amount": 47.90, "category": "Alimentação", "description": "Mercado Extra"}
 """
+
+ONBOARDING_WELCOME_PROMPT = """
+Olá! 👋 Eu sou o *Finza*, seu assistente financeiro pessoal via WhatsApp! 💰
+
+Vou te ajudar a controlar seus gastos e entradas de forma simples, só mandando mensagens aqui.
+
+Antes de começar, qual é o seu nome?
+"""
+
+ONBOARDING_BUDGET_PROMPT = """
+Prazer, {name}! 😊
+
+Agora me diz: qual é o seu *orçamento mensal*? (valor total que você tem para gastar por mês)
+
+Pode mandar só o número, por exemplo: *3000*
+"""
+
+ONBOARDING_DONE_PROMPT = """
+Perfeito, {name}! Tudo configurado! 🎉
+
+Seu orçamento mensal é de *R$ {budget:.2f}*.
+
+Agora é só me mandar seus gastos e entradas! Veja o que eu sei fazer:
+
+💸 *Registrar gasto:* "gastei 45 no ifood"
+💰 *Registrar entrada:* "recebi 3200 de salário"
+📊 *Ver resumo:* "quanto gastei esse mês?"
+🖼️ *Comprovante:* envie uma foto do recibo
+
+Vamos lá! 🚀
+"""
+
+ONBOARDING_INVALID_BUDGET_PROMPT = """
+Hmm, não entendi esse valor. 😅
+
+Por favor, manda só o número do seu orçamento mensal.
+
+Exemplo: *3000* ou *1500.50*
+"""

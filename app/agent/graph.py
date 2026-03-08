@@ -3,6 +3,7 @@ from langgraph.graph import StateGraph, END
 
 from app.agent.state import AgentState, MessageIntent
 from app.agent.nodes import (
+    onboarding_node,
     classifier_node,
     extractor_node,
     image_extractor_node,
@@ -12,6 +13,13 @@ from app.agent.nodes import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def route_onboarding(state: AgentState) -> str:
+    """Decide se continua o onboarding ou segue para o fluxo normal."""
+    if state.response is not None:
+        return "end"  # Onboarding ainda em andamento → responde e termina
+    return "classifier"  # Onboarding concluído → segue fluxo normal
 
 
 def route(state: AgentState) -> str:
@@ -28,15 +36,26 @@ def build_graph():
     graph = StateGraph(AgentState)
 
     # Adiciona os nós
+    graph.add_node("onboarding", onboarding_node)
     graph.add_node("classifier", classifier_node)
     graph.add_node("extractor", extractor_node)
-    graph.add_node("image_extractor", image_extractor_node)  
+    graph.add_node("image_extractor", image_extractor_node)
     graph.add_node("saver", saver_node)
     graph.add_node("query", query_node)
     graph.add_node("fallback", fallback_node)
 
-    # Define o nó de entrada
-    graph.set_entry_point("classifier")
+    # Define o nó de entrada como onboarding
+    graph.set_entry_point("onboarding")
+
+    # Após onboarding → decide se termina ou segue
+    graph.add_conditional_edges(
+        "onboarding",
+        route_onboarding,
+        {
+            "end": END,
+            "classifier": "classifier",
+        }
+    )
 
     # Roteamento condicional após o classificador
     graph.add_conditional_edges(
@@ -53,7 +72,7 @@ def build_graph():
     graph.add_edge("extractor", "saver")
 
     # Após extrator de imagem → salva no banco
-    graph.add_edge("image_extractor", "saver")  
+    graph.add_edge("image_extractor", "saver")
 
     # Nós finais → END
     graph.add_edge("saver", END)
@@ -81,15 +100,20 @@ class FinanceAgent:
         """Processa uma imagem e retorna a resposta."""
         logger.info(f"🖼️ Processando imagem de {phone}: {image_url}")
 
-        initial_state = AgentState(
+        # Verifica onboarding antes de processar a imagem
+        onboarding_state = AgentState(
             phone=phone,
             message=caption or "comprovante",
             image_url=image_url,
-            intent="image",
         )
+        onboarding_result = onboarding_node(onboarding_state)
 
-        # Invoca direto no image_extractor, pulando o classifier
-        state_after_extractor = image_extractor_node(initial_state)
+        # Se onboarding ainda em andamento → retorna resposta do onboarding
+        if onboarding_result.response is not None:
+            return onboarding_result.response
+
+        # Onboarding concluído → processa imagem normalmente
+        state_after_extractor = image_extractor_node(onboarding_result)
         state_after_saver = saver_node(state_after_extractor)
 
         return state_after_saver.response

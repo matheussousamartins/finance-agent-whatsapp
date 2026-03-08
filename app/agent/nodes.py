@@ -4,13 +4,56 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
 from app.agent.state import AgentState, MessageIntent
-from app.agent.prompts import CLASSIFIER_PROMPT, EXTRACTOR_PROMPT, QUERY_PROMPT, IMAGE_EXTRACTOR_PROMPT
+from app.agent.prompts import (
+    CLASSIFIER_PROMPT, EXTRACTOR_PROMPT, QUERY_PROMPT, IMAGE_EXTRACTOR_PROMPT,
+    ONBOARDING_WELCOME_PROMPT, ONBOARDING_BUDGET_PROMPT,
+    ONBOARDING_DONE_PROMPT, ONBOARDING_INVALID_BUDGET_PROMPT,
+)
 from app.models.transaction import TransactionType
-from app.services.database import save_transaction, get_summary
+from app.models.user import OnboardingStep
+from app.services.database import (
+    save_transaction, get_summary,
+    get_user, create_user, update_user_name, update_user_budget,
+)
 
 logger = logging.getLogger(__name__)
 
 llm = ChatOpenAI(model="gpt-4o", temperature=0)
+
+
+# ─────────────────────────────────────────
+# NÓ 0: Onboarding
+# Verifica se usuário existe e coleta dados
+# ─────────────────────────────────────────
+def onboarding_node(state: AgentState) -> AgentState:
+    logger.info(f"👋 Verificando onboarding para {state.phone}")
+
+    user = get_user(state.phone)
+
+    # Usuário novo → cria e envia boas-vindas
+    if not user:
+        create_user(state.phone)
+        return AgentState(**{**state.model_dump(), "response": ONBOARDING_WELCOME_PROMPT})
+
+    # Aguardando nome
+    if user.onboarding_step == OnboardingStep.WAITING_NAME:
+        name = state.message.strip().title()
+        update_user_name(state.phone, name)
+        response = ONBOARDING_BUDGET_PROMPT.replace("{name}", name)
+        return AgentState(**{**state.model_dump(), "response": response})
+
+    # Aguardando orçamento
+    if user.onboarding_step == OnboardingStep.WAITING_BUDGET:
+        try:
+            budget = float(state.message.strip().replace(",", ".").replace("R$", "").strip())
+            update_user_budget(state.phone, budget)
+            response = ONBOARDING_DONE_PROMPT.replace("{name}", user.name).replace("{budget:.2f}", f"{budget:.2f}")
+            return AgentState(**{**state.model_dump(), "response": response})
+        except ValueError:
+            return AgentState(**{**state.model_dump(), "response": ONBOARDING_INVALID_BUDGET_PROMPT})
+
+    # Onboarding já concluído → segue fluxo normal
+    return AgentState(**{**state.model_dump(), "intent": None})
 
 
 # ─────────────────────────────────────────
