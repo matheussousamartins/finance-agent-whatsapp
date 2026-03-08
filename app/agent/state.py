@@ -14,6 +14,7 @@ class AgentState(BaseModel):
     # Dados da mensagem recebida
     phone: str
     message: str
+    image_url: Optional[str] = None
 
     # Resultado da classificação
     intent: Optional[str] = None

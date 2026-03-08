@@ -4,7 +4,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
 from app.agent.state import AgentState, MessageIntent
-from app.agent.prompts import CLASSIFIER_PROMPT, EXTRACTOR_PROMPT, QUERY_PROMPT
+from app.agent.prompts import CLASSIFIER_PROMPT, EXTRACTOR_PROMPT, QUERY_PROMPT, IMAGE_EXTRACTOR_PROMPT
 from app.models.transaction import TransactionType
 from app.services.database import save_transaction, get_summary
 
@@ -32,14 +32,13 @@ def classifier_node(state: AgentState) -> AgentState:
 
 
 # ─────────────────────────────────────────
-# NÓ 2: Extrator
+# NÓ 2: Extrator de texto
 # Extrai valor, categoria e descrição da mensagem
 # ─────────────────────────────────────────
 def extractor_node(state: AgentState) -> AgentState:
     logger.info(f"📦 Extraindo dados da mensagem: {state.message}")
 
     prompt = EXTRACTOR_PROMPT.replace("{message}", state.message)
-    logger.info(f"📝 Prompt enviado: {prompt}") 
     response = llm.invoke([HumanMessage(content=prompt)])
 
     try:
@@ -66,6 +65,50 @@ def extractor_node(state: AgentState) -> AgentState:
     except json.JSONDecodeError:
         logger.error(f"❌ Erro ao parsear JSON do extrator: {response.content}")
         return AgentState(**{**state.model_dump(), "amount": 0.0, "category": "Outros"})
+
+
+# ─────────────────────────────────────────
+# NÓ 2B: Extrator de imagem
+# Extrai dados financeiros de foto de comprovante
+# ─────────────────────────────────────────
+def image_extractor_node(state: AgentState) -> AgentState:
+    logger.info(f"🖼️ Extraindo dados da imagem: {state.image_url}")
+
+    try:
+        response = llm.invoke([
+            HumanMessage(content=[
+                {"type": "text", "text": IMAGE_EXTRACTOR_PROMPT},
+                {"type": "image_url", "image_url": {"url": state.image_url}},
+            ])
+        ])
+
+        raw = response.content.strip()
+        logger.info(f"🔍 Resposta bruta do extrator de imagem: {raw}")
+
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        data = json.loads(raw)
+        return AgentState(**{
+            **state.model_dump(),
+            "amount": data.get("amount", 0.0),
+            "category": data.get("category", "Outros"),
+            "description": data.get("description", ""),
+            "transaction_type": TransactionType.EXPENSE,
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar imagem: {e}")
+        return AgentState(**{
+            **state.model_dump(),
+            "amount": 0.0,
+            "category": "Outros",
+            "description": "erro ao processar imagem",
+            "transaction_type": TransactionType.EXPENSE,
+        })
 
 
 # ─────────────────────────────────────────
@@ -126,6 +169,7 @@ def fallback_node(state: AgentState) -> AgentState:
         "🤖 Não entendi sua mensagem. Tente algo como:\n\n"
         "💸 *Registrar gasto:* \"gastei 45 no ifood\"\n"
         "💰 *Registrar entrada:* \"recebi 3200 de salário\"\n"
-        "📊 *Ver resumo:* \"quanto gastei esse mês?\""
+        "📊 *Ver resumo:* \"quanto gastei esse mês?\"\n"
+        "🖼️ *Comprovante:* envie uma foto do recibo"
     )
     return AgentState(**{**state.model_dump(), "response": response})

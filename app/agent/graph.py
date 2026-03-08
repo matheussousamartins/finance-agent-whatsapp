@@ -5,6 +5,7 @@ from app.agent.state import AgentState, MessageIntent
 from app.agent.nodes import (
     classifier_node,
     extractor_node,
+    image_extractor_node,
     saver_node,
     query_node,
     fallback_node,
@@ -29,6 +30,7 @@ def build_graph():
     # Adiciona os nós
     graph.add_node("classifier", classifier_node)
     graph.add_node("extractor", extractor_node)
+    graph.add_node("image_extractor", image_extractor_node)  
     graph.add_node("saver", saver_node)
     graph.add_node("query", query_node)
     graph.add_node("fallback", fallback_node)
@@ -47,8 +49,11 @@ def build_graph():
         }
     )
 
-    # Após extrator → salva no banco
+    # Após extrator de texto → salva no banco
     graph.add_edge("extractor", "saver")
+
+    # Após extrator de imagem → salva no banco
+    graph.add_edge("image_extractor", "saver")  
 
     # Nós finais → END
     graph.add_edge("saver", END)
@@ -64,10 +69,24 @@ class FinanceAgent:
         logger.info("🧠 FinanceAgent inicializado!")
 
     async def process(self, phone: str, message: str) -> str:
-        """Processa uma mensagem e retorna a resposta."""
+        """Processa uma mensagem de texto e retorna a resposta."""
         logger.info(f"📩 Processando mensagem de {phone}: {message}")
 
         initial_state = AgentState(phone=phone, message=message)
         final_state = self.graph.invoke(initial_state)
+
+        return final_state["response"]
+
+    async def process_image(self, phone: str, image_url: str, caption: str = "") -> str:
+        """Processa uma imagem e retorna a resposta."""
+        logger.info(f"🖼️ Processando imagem de {phone}: {image_url}")
+
+        initial_state = AgentState(
+            phone=phone,
+            message=caption or "comprovante",
+            image_url=image_url,
+            intent="image",  # 👈 pula o classifier e vai direto pro image_extractor
+        )
+        final_state = self.graph.invoke(initial_state, {"override_entry": "image_extractor"})
 
         return final_state["response"]

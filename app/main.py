@@ -24,8 +24,8 @@ agent = FinanceAgent()
 @app.on_event("startup")
 async def startup():
     init_db()
-    logger.info("Banco de dados inicializado")
-    logger.info("Finance Agent WhatsApp rodando!")
+    logger.info("✅ Banco de dados inicializado")
+    logger.info("🚀 Finance Agent WhatsApp rodando!")
 
 
 @app.get("/")
@@ -42,25 +42,50 @@ async def health():
 async def webhook(request: Request):
     try:
         payload = await request.json()
-        logger.info(f"Webhook recebido: {payload}")
+        logger.info(f"📩 Webhook recebido: {payload}")
 
+        # Ignora mensagens enviadas pelo próprio bot
         if payload.get("fromMe"):
             return {"status": "ignored"}
 
         phone = payload.get("phone")
+        if not phone:
+            return {"status": "ignored"}
+
+        # ─────────────────────────────────────────
+        # Detecta se é imagem ou texto
+        # ─────────────────────────────────────────
+        image_data = payload.get("image")
         message_data = payload.get("text", {})
         message = message_data.get("message", "")
 
-        if not phone or not message:
+        if image_data:
+            # Usuário mandou uma foto
+            image_url = image_data.get("url", "")
+            caption = image_data.get("caption", "")
+            logger.info(f"🖼️ Imagem recebida de {phone}: {image_url}")
+
+            if not image_url:
+                return {"status": "ignored"}
+
+            response = await agent.process_image(
+                phone=phone,
+                image_url=image_url,
+                caption=caption,
+            )
+
+        elif message:
+            # Usuário mandou texto
+            logger.info(f"📱 Mensagem de {phone}: {message}")
+            response = await agent.process(phone=phone, message=message)
+
+        else:
+            # Nem texto nem imagem — ignora
             return {"status": "ignored"}
 
-        logger.info(f"Mensagem de {phone}: {message}")
-
-        response = await agent.process(phone=phone, message=message)
         await zapi.send_text(phone=phone, message=response)
-
         return {"status": "ok"}
 
     except Exception as e:
-        logger.error(f"Erro no webhook: {e}")
+        logger.error(f"❌ Erro no webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
