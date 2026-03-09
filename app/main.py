@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException
 from dotenv import load_dotenv
 import logging
+import os
 
 from app.services.zapi import ZAPIService
 from app.services.database import init_db, engine
@@ -10,6 +11,8 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+ZAPI_CLIENT_TOKEN = os.getenv("ZAPI_CLIENT_TOKEN", "")
 
 app = FastAPI(
     title="Finance Agent WhatsApp",
@@ -43,6 +46,13 @@ async def webhook(request: Request):
     phone = None
     try:
         payload = await request.json()
+
+        # Valida o Client-Token da Z-API
+        client_token = request.headers.get("client-token", "")
+        if ZAPI_CLIENT_TOKEN and client_token != ZAPI_CLIENT_TOKEN:
+            logger.warning(f"⚠️ Token inválido recebido: {client_token}")
+            return {"status": "ignored"}
+
         logger.info(f"📩 Webhook recebido: {payload}")
 
         if payload.get("fromMe"):
@@ -91,4 +101,3 @@ async def webhook(request: Request):
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=str(e))
-
