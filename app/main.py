@@ -40,11 +40,11 @@ async def health():
 
 @app.post("/webhook")
 async def webhook(request: Request):
+    phone = None
     try:
         payload = await request.json()
         logger.info(f"📩 Webhook recebido: {payload}")
 
-        # Ignora mensagens enviadas pelo próprio bot
         if payload.get("fromMe"):
             return {"status": "ignored"}
 
@@ -52,15 +52,11 @@ async def webhook(request: Request):
         if not phone:
             return {"status": "ignored"}
 
-        # ─────────────────────────────────────────
-        # Detecta se é imagem ou texto
-        # ─────────────────────────────────────────
         image_data = payload.get("image")
         message_data = payload.get("text", {})
         message = message_data.get("message", "")
 
         if image_data:
-            # Usuário mandou uma foto
             image_url = image_data.get("imageUrl", "") or image_data.get("url", "")
             caption = image_data.get("caption", "")
             logger.info(f"🖼️ Imagem recebida de {phone}: {image_url}")
@@ -75,12 +71,10 @@ async def webhook(request: Request):
             )
 
         elif message:
-            # Usuário mandou texto
             logger.info(f"📱 Mensagem de {phone}: {message}")
             response = await agent.process(phone=phone, message=message)
 
         else:
-            # Nem texto nem imagem — ignora
             return {"status": "ignored"}
 
         await zapi.send_text(phone=phone, message=response)
@@ -88,4 +82,12 @@ async def webhook(request: Request):
 
     except Exception as e:
         logger.error(f"❌ Erro no webhook: {e}")
+        try:
+            if phone:
+                await zapi.send_text(
+                    phone=phone,
+                    message="Ops! 😅 Tive uma instabilidade aqui. Tente novamente em instantes 🙏"
+                )
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=str(e))
