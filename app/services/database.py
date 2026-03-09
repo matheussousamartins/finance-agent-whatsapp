@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -36,7 +36,10 @@ def get_session() -> Session:
 def get_user(phone: str) -> User | None:
     """Busca um usuário pelo telefone."""
     with get_session() as session:
-        return session.query(User).filter(User.phone == phone).first()
+        user = session.query(User).filter(User.phone == phone).first()
+        if user:
+            session.expunge(user)
+        return user
 
 
 def create_user(phone: str) -> User:
@@ -51,6 +54,7 @@ def create_user(phone: str) -> User:
         session.add(user)
         session.commit()
         session.refresh(user)
+        session.expunge(user)
         return user
 
 
@@ -62,6 +66,7 @@ def update_user_name(phone: str, name: str) -> User:
         user.onboarding_step = OnboardingStep.WAITING_BUDGET
         session.commit()
         session.refresh(user)
+        session.expunge(user)
         return user
 
 
@@ -73,6 +78,7 @@ def update_user_budget(phone: str, budget: float) -> User:
         user.onboarding_step = OnboardingStep.DONE
         session.commit()
         session.refresh(user)
+        session.expunge(user)
         return user
 
 
@@ -92,6 +98,7 @@ def activate_user_plan(phone: str, plan: str) -> User:
         user.plan_expires_at = datetime.utcnow() + timedelta(days=days)
         session.commit()
         session.refresh(user)
+        session.expunge(user)
         return user
 
 
@@ -102,6 +109,7 @@ def expire_user_plan(phone: str) -> User:
         user.plan_status = PlanStatus.EXPIRED
         session.commit()
         session.refresh(user)
+        session.expunge(user)
         return user
 
 
