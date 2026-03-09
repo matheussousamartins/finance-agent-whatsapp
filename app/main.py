@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import logging
 
 from app.services.zapi import ZAPIService
-from app.services.database import init_db
+from app.services.database import init_db, engine
 from app.agent.graph import FinanceAgent
 
 load_dotenv()
@@ -91,3 +91,13 @@ async def webhook(request: Request):
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/admin/reset-users-table")
+async def reset_users_table():
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS users CASCADE"))
+        conn.commit()
+    init_db()
+    return {"status": "ok", "message": "Tabela users recriada!"}
