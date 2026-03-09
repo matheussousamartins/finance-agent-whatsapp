@@ -5,6 +5,7 @@ import os
 
 from app.services.zapi import ZAPIService
 from app.services.database import init_db, engine
+from app.services.audio import process_audio
 from app.agent.graph import FinanceAgent
 
 load_dotenv()
@@ -48,7 +49,11 @@ async def webhook(request: Request):
         payload = await request.json()
 
         # Valida o Client-Token da Z-API
-        client_token = request.headers.get("client-token", "")
+        client_token = (
+            request.headers.get("Client-Token", "") or
+            request.headers.get("client-token", "") or
+            request.headers.get("clienttoken", "")
+        )
         if ZAPI_CLIENT_TOKEN and client_token != ZAPI_CLIENT_TOKEN:
             logger.warning(f"⚠️ Token inválido recebido: {client_token}")
             return {"status": "ignored"}
@@ -63,10 +68,12 @@ async def webhook(request: Request):
             return {"status": "ignored"}
 
         image_data = payload.get("image")
+        audio_data = payload.get("audio")
         message_data = payload.get("text", {})
         message = message_data.get("message", "")
 
         if image_data:
+            # Usuário mandou foto
             image_url = image_data.get("imageUrl", "") or image_data.get("url", "")
             caption = image_data.get("caption", "")
             logger.info(f"🖼️ Imagem recebida de {phone}: {image_url}")
@@ -80,7 +87,31 @@ async def webhook(request: Request):
                 caption=caption,
             )
 
+        elif audio_data:
+            # Usuário mandou áudio
+            audio_url = audio_data.get("audioUrl", "") or audio_data.get("url", "")
+            logger.info(f"🎙️ Áudio recebido de {phone}: {audio_url}")
+
+            if not audio_url:
+                return {"status": "ignored"}
+
+            # Transcreve o áudio para texto
+            transcribed_text = await process_audio(audio_url)
+
+            if not transcribed_text:
+                await zapi.send_text(
+                    phone=phone,
+                    message="Não consegui entender o áudio 😅 Tente novamente ou manda por texto!"
+                )
+                return {"status": "ok"}
+
+            logger.info(f"📝 Áudio transcrito: {transcribed_text}")
+
+            # Processa o texto transcrito normalmente
+            response = await agent.process(phone=phone, message=transcribed_text)
+
         elif message:
+            # Usuário mandou texto
             logger.info(f"📱 Mensagem de {phone}: {message}")
             response = await agent.process(phone=phone, message=message)
 
