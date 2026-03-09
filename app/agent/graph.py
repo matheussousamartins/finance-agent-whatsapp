@@ -3,6 +3,7 @@ from langgraph.graph import StateGraph, END
 
 from app.agent.state import AgentState, MessageIntent
 from app.agent.nodes import (
+    access_check_node,
     onboarding_node,
     classifier_node,
     extractor_node,
@@ -13,6 +14,13 @@ from app.agent.nodes import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def route_access(state: AgentState) -> str:
+    """Decide se bloqueia ou segue para o onboarding."""
+    if state.response is not None:
+        return "end"  # Sem acesso → bloqueia
+    return "onboarding"  # Tem acesso → segue
 
 
 def route_onboarding(state: AgentState) -> str:
@@ -36,6 +44,7 @@ def build_graph():
     graph = StateGraph(AgentState)
 
     # Adiciona os nós
+    graph.add_node("access_check", access_check_node)
     graph.add_node("onboarding", onboarding_node)
     graph.add_node("classifier", classifier_node)
     graph.add_node("extractor", extractor_node)
@@ -44,8 +53,18 @@ def build_graph():
     graph.add_node("query", query_node)
     graph.add_node("fallback", fallback_node)
 
-    # Define o nó de entrada como onboarding
-    graph.set_entry_point("onboarding")
+    # Define o nó de entrada como access_check
+    graph.set_entry_point("access_check")
+
+    # Após access_check → bloqueia ou segue
+    graph.add_conditional_edges(
+        "access_check",
+        route_access,
+        {
+            "end": END,
+            "onboarding": "onboarding",
+        }
+    )
 
     # Após onboarding → decide se termina ou segue
     graph.add_conditional_edges(
@@ -100,19 +119,22 @@ class FinanceAgent:
         """Processa uma imagem e retorna a resposta."""
         logger.info(f"🖼️ Processando imagem de {phone}: {image_url}")
 
-        # Verifica onboarding antes de processar a imagem
-        onboarding_state = AgentState(
+        # Verifica acesso e onboarding antes de processar a imagem
+        initial_state = AgentState(
             phone=phone,
             message=caption or "comprovante",
             image_url=image_url,
         )
-        onboarding_result = onboarding_node(onboarding_state)
 
-        # Se onboarding ainda em andamento → retorna resposta do onboarding
+        access_result = access_check_node(initial_state)
+        if access_result.response is not None:
+            return access_result.response
+
+        onboarding_result = onboarding_node(access_result)
         if onboarding_result.response is not None:
             return onboarding_result.response
 
-        # Onboarding concluído → processa imagem normalmente
+        # Processa imagem normalmente
         state_after_extractor = image_extractor_node(onboarding_result)
         state_after_saver = saver_node(state_after_extractor)
 

@@ -10,7 +10,7 @@ from app.agent.prompts import (
     ONBOARDING_DONE_PROMPT, ONBOARDING_INVALID_BUDGET_PROMPT,
 )
 from app.models.transaction import TransactionType
-from app.models.user import OnboardingStep
+from app.models.user import OnboardingStep, PlanStatus
 from app.services.database import (
     save_transaction, get_summary,
     get_user, create_user, update_user_name, update_user_budget,
@@ -19,6 +19,52 @@ from app.services.database import (
 logger = logging.getLogger(__name__)
 
 llm = ChatOpenAI(model="gpt-4o", temperature=0)
+
+UPGRADE_MESSAGE = """
+⏰ *Seu período de teste encerrou!*
+
+Para continuar usando o Finza, escolha um plano:
+
+📅 *Mensal* — R$ 19,90/mês
+📅 *Trimestral* — R$ 49,90 (economize R$ 9,80)
+⭐ *Semestral* — R$ 89,90 (economize R$ 29,50)
+
+👉 Acesse: [LINK_KIWIFY]
+
+Qualquer dúvida é só falar! 😊
+"""
+
+
+# ─────────────────────────────────────────
+# NÓ -1: Verificação de acesso
+# Verifica se trial ou plano está ativo
+# ─────────────────────────────────────────
+def access_check_node(state: AgentState) -> AgentState:
+    logger.info(f"🔐 Verificando acesso para {state.phone}")
+
+    user = get_user(state.phone)
+
+    # Usuário novo → deixa passar para o onboarding criar
+    if not user:
+        return AgentState(**{**state.model_dump(), "intent": None})
+
+    # Onboarding ainda em andamento → deixa passar
+    if user.onboarding_step != OnboardingStep.DONE:
+        return AgentState(**{**state.model_dump(), "intent": None})
+
+    # Tem acesso (trial ativo ou plano ativo) → deixa passar
+    if user.has_access():
+        # Avisa quantos dias restam no trial
+        if user.plan_status == PlanStatus.TRIAL:
+            from datetime import datetime
+            days_left = 7 - (datetime.utcnow() - user.trial_start).days
+            if days_left <= 2:
+                logger.info(f"⚠️ Trial expirando em {days_left} dia(s) para {state.phone}")
+        return AgentState(**{**state.model_dump(), "intent": None})
+
+    # Sem acesso → bloqueia e manda mensagem de upgrade
+    logger.info(f"🚫 Acesso bloqueado para {state.phone}")
+    return AgentState(**{**state.model_dump(), "response": UPGRADE_MESSAGE})
 
 
 # ─────────────────────────────────────────

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import os
 
 from app.models.transaction import Base, Transaction, TransactionType
-from app.models.user import User, OnboardingStep
+from app.models.user import User, OnboardingStep, PlanStatus
 
 load_dotenv()
 
@@ -42,7 +42,12 @@ def get_user(phone: str) -> User | None:
 def create_user(phone: str) -> User:
     """Cria um novo usuário."""
     with get_session() as session:
-        user = User(phone=phone, onboarding_step=OnboardingStep.WAITING_NAME)
+        user = User(
+            phone=phone,
+            onboarding_step=OnboardingStep.WAITING_NAME,
+            plan_status=PlanStatus.TRIAL,
+            trial_start=datetime.utcnow(),
+        )
         session.add(user)
         session.commit()
         session.refresh(user)
@@ -66,6 +71,35 @@ def update_user_budget(phone: str, budget: float) -> User:
         user = session.query(User).filter(User.phone == phone).first()
         user.monthly_budget = budget
         user.onboarding_step = OnboardingStep.DONE
+        session.commit()
+        session.refresh(user)
+        return user
+
+
+def activate_user_plan(phone: str, plan: str) -> User:
+    """Ativa um plano pago para o usuário."""
+    plan_durations = {
+        "mensal": 30,
+        "trimestral": 90,
+        "semestral": 180,
+    }
+    days = plan_durations.get(plan, 30)
+
+    with get_session() as session:
+        user = session.query(User).filter(User.phone == phone).first()
+        user.plan = plan
+        user.plan_status = PlanStatus.ACTIVE
+        user.plan_expires_at = datetime.utcnow() + timedelta(days=days)
+        session.commit()
+        session.refresh(user)
+        return user
+
+
+def expire_user_plan(phone: str) -> User:
+    """Marca o plano do usuário como expirado."""
+    with get_session() as session:
+        user = session.query(User).filter(User.phone == phone).first()
+        user.plan_status = PlanStatus.EXPIRED
         session.commit()
         session.refresh(user)
         return user
