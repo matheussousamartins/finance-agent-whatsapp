@@ -92,12 +92,3 @@ async def webhook(request: Request):
             pass
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.get("/admin/reset-users-table")
-async def reset_users_table():
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS users CASCADE"))
-        conn.commit()
-    init_db()
-    return {"status": "ok", "message": "Tabela users recriada!"}
