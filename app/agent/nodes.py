@@ -14,6 +14,7 @@ from app.models.user import OnboardingStep, PlanStatus
 from app.services.database import (
     save_transaction, get_summary,
     get_user, create_user, update_user_name, update_user_budget,
+    get_recent_transactions, get_transactions_by_category,
 )
 
 logger = logging.getLogger(__name__)
@@ -236,12 +237,21 @@ def query_node(state: AgentState) -> AgentState:
     logger.info(f"📊 Consultando resumo para {state.phone}")
 
     summary = get_summary(phone=state.phone, days=30)
+    recent = get_recent_transactions(phone=state.phone, limit=20)
+
+    # Formata transações individuais para o LLM
+    transactions_detail = ""
+    for t in recent:
+        tipo = "gasto" if t.type == TransactionType.EXPENSE else "entrada"
+        data = t.created_at.strftime("%d/%m")
+        transactions_detail += f"- {data} | {tipo} | {t.category} | R$ {t.amount:.2f} | {t.description or '-'}\n"
 
     prompt = QUERY_PROMPT.format(
         total_income=f"{summary['total_income']:.2f}",
         total_expense=f"{summary['total_expense']:.2f}",
         balance=f"{summary['balance']:.2f}",
         expenses_by_category=summary["expenses_by_category"],
+        transactions_detail=transactions_detail,
         message=state.message,
     )
 

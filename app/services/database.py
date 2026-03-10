@@ -174,3 +174,20 @@ def get_recent_transactions(phone: str, limit: int = 5) -> list[Transaction]:
             .limit(limit)
             .all()
         )
+    
+def get_transactions_by_category(phone: str, category: str, days: int = 30) -> list[Transaction]:
+    """Retorna transações de uma categoria específica."""
+    since = datetime.utcnow() - timedelta(days=days)
+
+    with get_session() as session:
+        transactions = (
+            session.query(Transaction)
+            .filter(Transaction.phone == phone)
+            .filter(Transaction.created_at >= since)
+            .filter(Transaction.category.ilike(f"%{category}%"))
+            .order_by(Transaction.created_at.desc())
+            .all()
+        )
+        for t in transactions:
+            session.expunge(t)
+        return transactions
