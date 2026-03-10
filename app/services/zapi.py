@@ -17,7 +17,10 @@ BASE_URL = f"https://api.z-api.io/instances/{ZAPI_INSTANCE_ID}/token/{ZAPI_TOKEN
 class ZAPIService:
     def __init__(self):
         self.base_url = BASE_URL
-        self.headers = {"Content-Type": "application/json"}
+        self.headers = {
+            "Content-Type": "application/json",
+            "Client-Token": ZAPI_CLIENT_TOKEN,
+        }
 
     async def send_text(self, phone: str, message: str) -> bool:
         """Envia uma mensagem de texto via Z-API."""
