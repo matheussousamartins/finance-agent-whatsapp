@@ -17,6 +17,9 @@ from app.services.database import (
     get_recent_transactions, get_transactions_by_category,
 )
 
+def fmt_brl(value: float) -> str:
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 logger = logging.getLogger(__name__)
 
 llm = ChatOpenAI(model="gpt-4o", temperature=0)
@@ -30,7 +33,7 @@ Para continuar usando o Finza, escolha um plano:
 📅 *Trimestral* — R$ 49,90 (economize R$ 9,80)
 ⭐ *Semestral* — R$ 89,90 (economize R$ 29,50)
 
-👉 Acesse: [LINK_KIWIFY]
+👉 Fale comigo para assinar: https://wa.me/5541998216349
 
 Qualquer dúvida é só falar! 😊
 """
@@ -222,7 +225,7 @@ def saver_node(state: AgentState) -> AgentState:
     response = (
         f"{emoji} *{tipo} registrado!*\n\n"
         f"📌 Categoria: {state.category}\n"
-        f"💵 Valor: R$ {state.amount:.2f}\n"
+        f"💵 Valor: {fmt_brl(state.amount)}\n"
         f"📝 Descrição: {state.description or '-'}"
     )
 
