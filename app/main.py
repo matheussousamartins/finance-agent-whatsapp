@@ -48,16 +48,6 @@ async def webhook(request: Request):
     try:
         payload = await request.json()
 
-        # Valida o Client-Token da Z-API
-        client_token = (
-            request.headers.get("Client-Token", "") or
-            request.headers.get("client-token", "") or
-            request.headers.get("clienttoken", "")
-        )
-        if ZAPI_CLIENT_TOKEN and client_token != ZAPI_CLIENT_TOKEN:
-            logger.warning(f"⚠️ Token inválido recebido: {client_token}")
-            return {"status": "ignored"}
-
         logger.info(f"📩 Webhook recebido: {payload}")
 
         if payload.get("fromMe"):
